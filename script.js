@@ -1,6 +1,7 @@
 'use strict';
 
 const form = document.querySelector('.form');
+const mapWeb = document.querySelector('#map');
 const formEdit = document.querySelector('.form__edit');
 const containerWorkouts = document.querySelector('.workouts');
 const inputType = document.querySelectorAll('.form__input--type')[1];
@@ -82,10 +83,16 @@ class App {
   #map;
   #mapEvent;
   #workouts = [];
+  #shape = [];
+  #drawCheck = false;
 
   constructor() {
     this._getPosition();
     this._getLocalStorage();
+    window.addEventListener('load', this._getLocalStorageDraw.bind(this));
+    mapWeb.addEventListener('click', this._drawShapes.bind(this), {
+      once: true,
+    });
     form.addEventListener('submit', this._newWorkout.bind(this));
     inputType.addEventListener('change', this._toggleElevationField.bind(this));
     containerWorkouts.addEventListener('click', this.deleteWorkout.bind(this));
@@ -129,6 +136,15 @@ class App {
     this.#mapEvent = mapE;
     form.classList.remove('hidden');
     inputDistance.focus();
+    // this._showDrawKit(this.#map, this.#drawCheck);
+    this.#drawCheck = true;
+  }
+
+  _showDrawKit(map, check) {
+    if (check === true) return;
+    // FeatureGroup is to store editable layers
+    this.#drawCheck = true;
+    this._drawShapes(map, `show`);
   }
 
   _showFormEdit() {
@@ -218,6 +234,7 @@ class App {
     this._renderWorkout(workout);
     this._hideForm();
     this._setLocalStorage();
+    this.#drawCheck = false;
   }
 
   renderWorkoutMarker(workout) {
@@ -312,11 +329,12 @@ class App {
 
   _setLocalStorage() {
     localStorage.setItem('workout', JSON.stringify(this.#workouts));
+    localStorage.setItem('shapes', JSON.stringify(this.#shape));
+    console.log(this.#shape);
   }
 
   _getLocalStorage() {
     let data = JSON.parse(localStorage.getItem('workout'));
-    console.log(data);
 
     if (!data) return;
 
@@ -355,10 +373,65 @@ class App {
     }
   }
 
+  _getLocalStorageDraw() {
+    let shapes = JSON.parse(localStorage.getItem('shapes'));
+
+    if (!shapes) return;
+    shapes.forEach(el => this.#shape.push(el));
+
+    let featureGroup = L.featureGroup();
+    this.#map.addLayer(featureGroup);
+    let options = {
+      position: 'topleft',
+      draw: {
+        polyline: {
+          shapeOptions: {
+            color: '#f357a1',
+            weight: 10,
+          },
+        },
+        polygon: {
+          allowIntersection: true, // Restricts shapes to simple polygons
+          drawError: {
+            color: '#e1e100', // Color the shape will turn when intersects
+            message: "<strong>Oh snap!<strong> you can't draw that!", // Message that will show when intersect
+          },
+          shapeOptions: {
+            color: '#bada55',
+          },
+        },
+        circle: false, // Turns off this drawing tool
+        rectangle: {
+          shapeOptions: {
+            clickable: false,
+          },
+        },
+        marker: {},
+      },
+      edit: {
+        featureGroup: featureGroup, //REQUIRED!!
+        remove: true,
+      },
+    };
+
+    shapes.forEach(el => {
+      console.log(el.geometry.type);
+      if (el.geometry.type !== 'Circle') {
+        featureGroup.addLayer(L.geoJSON(el));
+        console.log(L.geoJSON(el));
+        return;
+      }
+    });
+    if (this.#shape) {
+      filters.classList.remove('hidden');
+    }
+  }
+
   reset() {
     if (!this.#workouts) return;
 
     localStorage.removeItem('workout');
+    localStorage.removeItem('shapes');
     this._reloadPage();
   }
 
@@ -421,6 +494,7 @@ class App {
   }
 
   _editWorkout() {
+    console.log(this.#shape);
     const editButton = document.querySelectorAll('.workout__edit');
     editButton.forEach(edit => {
       edit.addEventListener('click', e => {
@@ -436,10 +510,15 @@ class App {
             workEdit = work;
           }
         });
-        console.log(workEdit);
         this._clearForm();
         // this._inputFormEdit(workEdit);
         this._showFormEdit();
+        this.#drawCheck = true;
+        console.log(this.#drawCheck);
+        inputEditDistance.value = workEdit.distance;
+        inputEditDuration.value = workEdit.duration;
+        inputEditCadence.value = workEdit.cadence;
+        inputEditElevation.value = workEdit.elevationGain;
 
         formEdit.addEventListener(
           'submit',
@@ -471,7 +550,7 @@ class App {
                 this.#workouts[indexEdit].cadence;
             }
             if (workEdit.type === `cycling`) {
-              const elevationGain = inputEditElevation.value;
+              const elevationGain = +inputEditElevation.value;
               if (
                 !validInputs(distance, duration, elevationGain) ||
                 !allPositive(distance, duration, elevationGain)
@@ -479,9 +558,9 @@ class App {
                 return alert('Enter valid inputs');
               }
 
-              this.#workouts[indexEdit].distance = distance;
-              this.#workouts[indexEdit].duration = duration;
-              this.#workouts[indexEdit].elevationGain = elevationGain;
+              this.#workouts[indexEdit].distance = +distance;
+              this.#workouts[indexEdit].duration = +duration;
+              this.#workouts[indexEdit].elevationGain = +elevationGain;
 
               details[0].querySelector(`.workout__value`).textContent =
                 this.#workouts[indexEdit].distance;
@@ -493,6 +572,8 @@ class App {
 
             this._setLocalStorage();
             this._hideFormEdit();
+            this._hideDrawKit(this.#map);
+            this.#drawCheck = false;
           }.bind(this)
         );
       });
@@ -519,9 +600,68 @@ class App {
     if (e.key == 'Escape') {
       this._hideForm();
       this._hideFormEdit();
+      this._hideDrawKit();
     }
   }
 
-  _drawShapes() {}
+  _drawShapes() {
+    let shape = [];
+    let editableLayers = new L.FeatureGroup();
+    this.#map.addLayer(editableLayers);
+    let options = {
+      position: 'topleft',
+      draw: {
+        polyline: {
+          shapeOptions: {
+            color: '#f357a1',
+            weight: 10,
+          },
+        },
+        polygon: {
+          allowIntersection: true, // Restricts shapes to simple polygons
+          drawError: {
+            color: '#e1e100', // Color the shape will turn when intersects
+            message: "<strong>Oh snap!<strong> you can't draw that!", // Message that will show when intersect
+          },
+          shapeOptions: {
+            color: '#bada55',
+          },
+        },
+        circle: false, // Turns off this drawing tool
+        rectangle: {
+          shapeOptions: {
+            clickable: false,
+          },
+        },
+        marker: {},
+      },
+      edit: {
+        featureGroup: editableLayers, //REQUIRED!!
+        remove: true,
+      },
+    };
+
+    let drawControl = new L.Control.Draw(options);
+    this.#map.addControl(drawControl);
+
+    this.#map.on(
+      L.Draw.Event.CREATED,
+      function (e) {
+          let type = e.layerType,
+            layer = e.layer;
+
+          if (type === 'marker') {
+            layer.bindPopup('A popup!');
+          }
+          if (type !== 'circle') {
+            this.#shape.push(layer.toGeoJSON());
+          }
+
+          this._setLocalStorage();
+          editableLayers.addLayer(layer);
+          console.log(editableLayers);
+      }.bind(this)
+    );
+  }
 }
 const app = new App();
