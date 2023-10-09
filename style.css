@@ -273,6 +273,11 @@ a:visited {
   color: var(--color-light--1);
 }
 
+.copyright img{
+  width: 50px;
+  height: 50px;
+}
+
 .twitter-link:link,
 .twitter-link:visited {
   color: var(--color-light--1);
