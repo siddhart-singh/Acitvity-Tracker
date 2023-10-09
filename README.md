@@ -10,7 +10,7 @@ It also stores user input in local storage API, as a result refreshing the page 
 
 ## How to run the Project
 
-Project is live on [*THIS LINK*](https://siddhart-singh.github.io/Acitvity-Tracker/)
+Project is live at [*THIS LINK*](https://siddhart-singh.github.io/Acitvity-Tracker/)
 
 ## How to use the Project
 
